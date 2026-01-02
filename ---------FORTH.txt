@@ -1,0 +1,516 @@
+MS
+
+DEFINE COMMENTS
+: ( IMMEDIATE
+ 1
+ BEGIN
+  KEY
+  DUP '(' = IF
+   DROP
+   1+
+  ELSE
+   ')' = IF
+    1-
+   THEN
+  THEN
+ DUP 0= UNTIL
+ DROP
+;
+
+( WRITE N SPACES )
+
+: SPACES
+ BEGIN
+  DUP 0>
+ WHILE
+  SPACE
+  1-
+ REPEAT
+ DROP
+;
+
+( PRINT UNSIGNED NUMBER )
+
+: U.
+ BASE @ /MOD
+ ?DUP IF
+  RECURSE
+ THEN
+ DUP 10 < IF
+  '0'
+ ELSE
+  10 -
+  'A'
+ THEN
+ +
+ EMIT
+;
+
+( PRINT STACK )
+
+( MODIFIED, JONESFORTH IS BACKWARDS! )
+
+: .S
+ S0@
+ 1-
+ BEGIN
+  DUP DSP@ 1+ >
+ WHILE
+  DUP @ U.
+  SPACE
+  1-
+ REPEAT
+ DROP
+;
+
+( GET NUMBER WIDTH )
+
+: UWIDTH
+ BASE @ /
+ ?DUP IF
+  RECURSE 1+
+ ELSE
+  1
+ THEN
+;
+
+( GET REMAINING SPACES )
+
+: U.R
+ SWAP
+ DUP
+ UWIDTH
+ ROT
+ SWAP -
+ SPACES
+ U.
+;
+
+( PRINT SIGNED NUMBER )
+( N WIDTH -- )
+
+: .R
+ SWAP
+ DUP 0< IF
+  NEGATE
+  1
+  SWAP
+  ROT
+  1-
+ ELSE
+  0
+  SWAP
+  ROT
+ THEN
+ SWAP
+ DUP
+ UWIDTH
+ ROT
+ SWAP -
+ SPACES
+ SWAP
+ IF
+  '-' EMIT
+ THEN
+ U.
+;
+
+: . 0 .R SPACE ;
+
+: U. U. SPACE ;
+
+( FETCH N PRINT )
+
+: ? @ . ;
+
+( C A B -- IS C WITHIN A LOWER AND B HIGHER )
+
+: WITHIN
+ -ROT
+ OVER
+ <= IF
+  > IF
+   TRUE
+  ELSE
+   FALSE
+  THEN
+ ELSE
+  2DROP
+  FALSE
+ THEN
+;
+
+( DEFINE A STRING )
+( -- LOC LENGTH )
+
+: S" IMMEDIATE
+ STATE @ IF
+  ' LITSTRING ,
+  HERE @
+  0 ,
+  BEGIN
+   KEY
+   DUP '"' <>
+  WHILE
+   ,
+  REPEAT
+  DROP
+  DUP
+  HERE @ SWAP -
+  1-
+  SWAP !
+ ELSE
+  HERE @
+  BEGIN
+   KEY
+   DUP '"' <>
+  WHILE
+   OVER !
+   1+
+  REPEAT
+  DROP
+  HERE @ -
+  HERE @
+  SWAP
+ THEN
+;
+
+( RAW STRING FOR SPRITE DEFINITIONS )
+
+: R" IMMEDIATE
+ BEGIN
+  KEY
+  DUP '"' <>
+ WHILE
+  ,
+ REPEAT
+ DROP
+;
+
+
+
+( PRINT A STRING )
+
+: ." IMMEDIATE
+ STATE @ IF
+  [COMPILE] S"
+  ' TELL ,
+ ELSE
+  BEGIN
+   KEY
+   DUP '"' = IF
+    DROP
+    EXIT
+   THEN
+   EMIT
+  AGAIN
+ THEN
+;
+
+( SETTING A VALUE )
+
+: TO IMMEDIATE
+ WORD
+ FIND
+ 1+ ( POINT TO VALUE )
+ STATE @ IF
+  ' LIT ,
+  ,
+  ' ! ,
+ ELSE
+  !
+ THEN
+;
+
+( ADDING TO A VALUE )
+
+: +TO IMMEDIATE
+ WORD
+ FIND
+ 1+ ( POINT TO VALUE )
+ STATE @ IF
+  ' LIT ,
+  ,
+  ' +! ,
+ ELSE
+  +!
+ THEN
+;
+
+( PRINT A WORD'S NAME )
+
+: ID.
+ 2 - ( POINT BACK AT LENGTH WORD )
+ DUP @ ( GET LENGTH WORD )
+ 255 AND ( RESTRICT TO LENGTH )
+ TUCK ( LEN, POINTER, LEN)
+ - ( SUBTRACT TO GET STRINGSTART )
+ SWAP ( START, LEN )
+ TELL
+;
+
+( PRINT ALL WORDS )
+
+: WORDS
+ LATEST @
+ BEGIN
+  ?DUP
+ WHILE
+  DUP ?HIDDEN NOT IF
+   DUP ID.
+   SPACE
+  THEN
+  1- @
+ REPEAT
+;
+
+( END CASE STATEMENT )
+
+: ENDCASE IMMEDIATE
+ ' DROP ,
+ BEGIN
+  ?DUP
+ WHILE
+  [COMPILE] THEN
+ REPEAT
+;
+
+( XT -- EXN? )
+
+: CATCH
+ DSP@ 1+ >R
+ ' EXCEPTION-MARKER 1+
+ >R
+ EXECUTE
+;
+
+( N -- )
+: THROW
+ ?DUP IF
+  RSP@
+  BEGIN
+   DUP R0 1- <
+  WHILE
+   DUP @
+   ' EXCEPTION-MARKER 1+ = IF
+    1+
+    RSP!
+    DUP DUP DUP
+    R>
+    1-
+    SWAP OVER
+    !
+    DSP! EXIT
+   THEN
+   1+
+  REPEAT
+  
+  DROP
+  
+  CASE
+  0 1- OF
+   ." ABORTED"
+  ENDOF
+   ." UNCAUGHT THROW"
+   DUP . CR
+  ENDCASE
+  QUIT
+ THEN
+;
+
+: ABORT 
+ 0 1- THROW
+;
+
+
+: PRINT-STACK-TRACE
+ RSP@
+ BEGIN
+  DUP R0 1- <
+ WHILE
+  DUP @
+  CASE
+  ' EXCEPTION-MARKER 1+ OF
+  ." CATCH ( DSP="
+  1+ DUP @ U.
+  ." )"
+ ENDOF
+  DUP
+  ?DUP IF
+   2DUP
+   ID.
+   [ CHAR + ] LITERAL EMIT
+   SWAP 1+ - .
+   THEN
+  ENDCASE
+  1+
+ REPEAT
+ DROP
+ CR
+;
+
+( HEX DUMP )
+
+: DUMP
+ BASE @ -ROT
+ HEX
+ BEGIN
+  ?DUP
+ WHILE
+  OVER 4 U.R
+  ." : "
+  2DUP
+  1- 3 AND 1+
+  
+  BEGIN
+   ?DUP
+  WHILE
+   SWAP
+   DUP @
+   4 U.R SPACE
+   1+ SWAP 1-
+  REPEAT
+  
+  DROP
+  
+  2DUP 1- 3 AND 1+
+  
+  BEGIN
+   ?DUP
+  WHILE
+   SWAP
+   DUP @
+   DUP 0 32 WITHIN UNLESS
+    EMIT
+   ELSE
+    DROP ." "
+   THEN
+   1+ SWAP 1-
+  REPEAT
+  
+  DROP
+  CR
+  
+  DUP 1- 3 AND 1+
+  TUCK
+  -
+  >R + R>
+ REPEAT
+ 
+ DROP
+ BASE !
+;
+
+: FREE
+ RAMTOP @
+ HERE @
+ -
+;
+
+( DECOMPILE A WORD )
+
+: SEE
+ WORD FIND ( FIRST GET THE WORD )
+ 
+ HERE @
+ LATEST @
+ BEGIN
+  2 PICK
+  OVER
+  <>
+ WHILE
+  NIP
+  DUP 1- @ ( CORRECT FOR DATA LAYOUT )
+ REPEAT
+ 
+ DROP
+ ( CHECK FOR LATEST WORD )
+ DUP LATEST @ < IF >DHA THEN
+ SWAP ( END START )
+ 
+ ':' EMIT SPACE DUP ID. SPACE
+ DUP ?IMMEDIATE IF ." IMMEDIATE " THEN
+ 
+ BEGIN
+  2DUP >
+ WHILE
+  DUP @
+  
+  CASE
+   
+   75 OF
+    1+ DUP @
+    .
+   ENDOF
+   
+   ' LITSTRING OF
+    [ CHAR S ] LITERAL EMIT '"' EMIT SPACE
+    1+ DUP @
+    SWAP 1+ SWAP
+    2DUP TELL
+    '"' EMIT SPACE
+    +
+   ENDOF
+   
+   ' 0BRANCH OF
+    CR
+    ." 0BRANCH ( "
+    1+ DUP @
+    .
+    ." ) "
+    CR
+   ENDOF
+   
+   ' BRANCH OF
+    CR
+    ." 0BRANCH ( "
+    1+ DUP @
+    .
+    ." ) "
+    CR
+   ENDOF
+   
+   ' LIT_TICK OF
+    [ CHAR ' ] LITERAL EMIT SPACE
+    1+ DUP @
+    ID. SPACE
+   ENDOF
+   
+   ' EXIT OF
+    2DUP
+    1+
+    <> IF
+     ." EXIT "
+    THEN
+   ENDOF
+   
+   4 OF
+    CR
+    ." JUMP "
+   ENDOF
+   
+    DUP
+    ID. SPACE
+  ENDCASE
+  
+  1+
+ REPEAT
+ ';' EMIT CR
+ 2DROP
+;
+
+
+
+
+
+
+MS
+SWAP - ( GET TOTAL STARTUP TIME )
+
+1000 /MOD ( DIVIDE INTO S AND MS )
+
+." Startup took " . ." s and " . ." ms." CR
+FREE . ." bytes available." CR
+." Now loading from clipboard..." CR
+
+
